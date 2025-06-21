@@ -2,6 +2,7 @@
 
 A lightweight wallpaper application for Linux that supports both X11 and Wayland with video wallpapers, audio detection, and multi-monitor setups.
 Made as an add-on for my [GUI project](https://github.com/MikiDevLog/wallpaperengine-gui).
+An old and bad attempt at this project is stored [here](https://github.com/MikiDevLog/linux-wallpaperengine-ext).
 
 ## Features
 
