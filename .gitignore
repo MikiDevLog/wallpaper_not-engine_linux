@@ -1,0 +1,66 @@
+# Build directories
+build/
+cmake-build-*/
+
+# Test directories
+fortestonly/
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Compiled binaries
+wallpaper_ne_linux
+*.exe
+*.out
+*.app
+
+# Object files
+*.o
+*.obj
+*.lo
+*.slo
+*.ko
+
+# Libraries
+*.so
+*.so.*
+*.dylib
+*.lib
+*.a
+*.la
+
+# Generated protocol files
+protocols/*.c
+protocols/*.h
+!protocols/*.xml
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test files (except example media)
+test/
+tests/
+!for_test_only/
+
+# Package files
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+
+# Core dumps
+core.*
