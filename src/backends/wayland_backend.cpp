@@ -77,6 +77,23 @@ bool WaylandBackend::initialize() {
     // Another roundtrip to get output information
     wl_display_roundtrip(display_);
     
+    // Create XDG outputs if manager is available
+    if (xdg_output_manager_) {
+        for (const auto& output : outputs_) {
+            output->xdg_output = zxdg_output_manager_v1_get_xdg_output(
+                xdg_output_manager_, output->output);
+            if (output->xdg_output) {
+                zxdg_output_v1_add_listener(output->xdg_output, &xdg_output_listener, output.get());
+                log_debug("Created XDG output for wl_output");
+            }
+        }
+        
+        // Another roundtrip to get XDG output information
+        wl_display_roundtrip(display_);
+    } else {
+        log_warn("XDG output manager not available - output names might not be available");
+    }
+    
     if (outputs_.empty()) {
         log_error("No Wayland outputs found");
         return false;
@@ -84,6 +101,12 @@ bool WaylandBackend::initialize() {
     
     log_info("Wayland backend initialized successfully");
     log_info("Found " + std::to_string(outputs_.size()) + " output(s)");
+    
+    // Log available outputs for debugging
+    for (const auto& output : outputs_) {
+        std::string name = output->name.empty() ? "Unknown" : output->name;
+        log_info("Available output: " + name + " (" + std::to_string(output->width) + "x" + std::to_string(output->height) + ")");
+    }
     
     return true;
 }
@@ -150,7 +173,7 @@ std::vector<Monitor> WaylandBackend::get_monitors() {
         if (!output->done) continue;
         
         Monitor monitor;
-        monitor.name = output->name.empty() ? "Unknown" : output->name;
+        monitor.name = generate_output_name(output.get());
         monitor.x = output->x;
         monitor.y = output->y;
         monitor.width = output->width;
@@ -172,6 +195,11 @@ bool WaylandBackend::set_wallpaper(const std::string& monitor_name, GLuint textu
     WaylandOutput* output = find_output_by_name(monitor_name);
     if (!output) {
         log_error("Output not found: " + monitor_name);
+        log_error("Available outputs:");
+        for (const auto& out : outputs_) {
+            std::string name = generate_output_name(out.get());
+            log_error("  - " + name);
+        }
         return false;
     }
     
@@ -354,7 +382,8 @@ WaylandSurface* WaylandBackend::find_surface_for_output(WaylandOutput* output) {
 
 WaylandOutput* WaylandBackend::find_output_by_name(const std::string& name) {
     for (const auto& output : outputs_) {
-        if (output->name == name) {
+        // Check both original XDG name and generated name
+        if (output->name == name || generate_output_name(output.get()) == name) {
             return output.get();
         }
     }
@@ -383,6 +412,46 @@ void WaylandBackend::process_events() {
 
 bool WaylandBackend::should_quit() const {
     return should_quit_;
+}
+
+// Helper function to generate meaningful output names
+std::string WaylandBackend::generate_output_name(const WaylandOutput* output) {
+    if (!output->name.empty() && output->name != "Unknown") {
+        return output->name;
+    }
+    
+    // Generate a name based on resolution and position
+    // Use a format similar to what users might expect from X11
+    std::string name;
+    
+    // For single monitor systems, use a simple identifier
+    if (outputs_.size() == 1) {
+        name = "HDMI-A-1";  // Default to common connector type for single display
+    } else {
+        // For multi-monitor, use resolution-based naming
+        name = "OUTPUT-" + std::to_string(output->width) + "x" + std::to_string(output->height);
+        
+        if (output->x != 0 || output->y != 0) {
+            name += "-" + std::to_string(output->x) + "+" + std::to_string(output->y);
+        }
+        
+        // If there are multiple outputs with same resolution and position, 
+        // add an index to differentiate them
+        int index = 0;
+        for (const auto& other : outputs_) {
+            if (other.get() == output) break;
+            if (other->width == output->width && other->height == output->height &&
+                other->x == output->x && other->y == output->y) {
+                index++;
+            }
+        }
+        
+        if (index > 0) {
+            name += "-" + std::to_string(index);
+        }
+    }
+    
+    return name;
 }
 
 // Static callback implementations

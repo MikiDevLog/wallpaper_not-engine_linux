@@ -109,4 +109,5 @@ private:
     WaylandSurface* find_surface_for_output(WaylandOutput* output);
     
     WaylandOutput* find_output_by_name(const std::string& name);
+    std::string generate_output_name(const WaylandOutput* output);
 };
