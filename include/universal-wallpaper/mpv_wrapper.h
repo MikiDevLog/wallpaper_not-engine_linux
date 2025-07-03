@@ -39,7 +39,9 @@ public:
     bool has_video() const;
     double get_duration() const;
     double get_position() const;
-    
+    bool has_new_frame() const;  // Check if there's a new frame to render
+    void mark_frame_rendered();  // Mark that we've rendered the current frame
+
     mpv_handle* get_handle() { return mpv_; }
     mpv_render_context* get_render_context() { return render_ctx_; }
 
@@ -47,6 +49,7 @@ private:
     mpv_handle* mpv_ = nullptr;
     mpv_render_context* render_ctx_ = nullptr;
     std::function<void()> wakeup_callback_;
+    mutable bool has_new_frame_ = true;  // Track if we need to render a new frame
     
     static void on_mpv_events(void* ctx);
 };

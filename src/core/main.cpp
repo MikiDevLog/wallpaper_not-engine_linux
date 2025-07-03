@@ -140,24 +140,40 @@ int main(int argc, char* argv[]) {
         
         // Main loop
         auto last_frame_time = std::chrono::steady_clock::now();
+        auto last_event_time = std::chrono::steady_clock::now();
+        auto last_audio_check_time = std::chrono::steady_clock::now();
+        
         // Use FPS setting from config
         const auto frame_duration = std::chrono::milliseconds(1000 / config.fps);
+        // Process events at a lower frequency to reduce CPU usage
+        const auto event_duration = std::chrono::milliseconds(16); // ~60 FPS for events
+        // Check audio status less frequently
+        const auto audio_check_duration = std::chrono::milliseconds(100); // 10 FPS for audio checks
         
-        log_info("Running at " + std::to_string(config.fps) + " FPS");
+        log_info("Running at " + std::to_string(config.fps) + " FPS" + 
+                 (config.adaptive_fps ? " (adaptive)" : " (fixed)"));
         log_debug("Starting main render loop");
         
         bool was_muted_by_detector = false;
+        bool needs_redraw = true; // Force initial render
+        bool is_static_content = false; // Track if content is static (image)
+        auto last_static_check = std::chrono::steady_clock::now();
         
         while (g_running && !display_manager.should_quit()) {
             auto current_time = std::chrono::steady_clock::now();
             auto elapsed = current_time - last_frame_time;
+            auto event_elapsed = current_time - last_event_time;
+            auto audio_elapsed = current_time - last_audio_check_time;
             
-            // Process events
-            display_manager.process_events();
-            mpv.process_events();
+            // Process events less frequently to reduce CPU usage
+            if (event_elapsed >= event_duration) {
+                display_manager.process_events();
+                mpv.process_events();
+                last_event_time = current_time;
+            }
             
-            // Handle auto-mute based on other audio playing
-            if (audio_detector.is_enabled() && !final_mute_audio) {
+            // Handle auto-mute based on other audio playing (less frequently)
+            if (audio_elapsed >= audio_check_duration && audio_detector.is_enabled() && !final_mute_audio) {
                 bool other_audio_playing = audio_detector.is_other_audio_playing();
                 
                 if (other_audio_playing && !was_muted_by_detector) {
@@ -171,12 +187,32 @@ int main(int argc, char* argv[]) {
                     was_muted_by_detector = false;
                     log_debug("Auto-unmuted wallpaper audio (no other apps playing)");
                 }
+                last_audio_check_time = current_time;
             }
             
-            // Render frame if enough time has passed
-            if (elapsed >= frame_duration) {
-                log_debug("Rendering frame");
+            // Render frame if enough time has passed and we have new content
+            bool should_render = needs_redraw || mpv.has_new_frame();
+            
+            if (elapsed >= frame_duration && should_render) {
+                log_debug("Rendering frame (new_content: " + std::string(mpv.has_new_frame() ? "true" : "false") + ")");
                 renderer.make_current();
+                
+                // Check if this is static content (image) for adaptive FPS
+                if (config.adaptive_fps && std::chrono::steady_clock::now() - last_static_check > std::chrono::seconds(5)) {
+                    double duration = mpv.get_duration();
+                    is_static_content = (duration <= 0.1); // Very short or no duration suggests static image
+                    last_static_check = std::chrono::steady_clock::now();
+                    
+                    if (is_static_content) {
+                        log_debug("Detected static content, reducing render frequency");
+                    }
+                }
+                
+                // For static content, reduce render frequency significantly
+                if (config.adaptive_fps && is_static_content && !mpv.has_new_frame() && elapsed < std::chrono::milliseconds(500)) {
+                    // Skip rendering for static content until 500ms have passed or we have new content
+                    continue;
+                }
                 
                 // Render MPV frame to a framebuffer
                 // For now, we'll use the screen dimensions of the primary monitor
@@ -202,7 +238,7 @@ int main(int argc, char* argv[]) {
                     log_debug("Using default scaling: " + std::to_string(render_width) + "x" + std::to_string(render_height));
                 }
                 
-                auto fbo_info = renderer.create_framebuffer(render_width, render_height);
+                auto fbo_info = renderer.get_or_create_framebuffer(render_width, render_height);
                 
                 log_debug("Created framebuffer: " + std::to_string(fbo_info.fbo) + ", texture: " + std::to_string(fbo_info.texture));
                 
@@ -229,6 +265,7 @@ int main(int argc, char* argv[]) {
                                                                  fbo_info.width, fbo_info.height);
                                 }
                             }
+                            needs_redraw = false; // Reset redraw flag after successful render
                         } else {
                             static int wait_counter = 0;
                             wait_counter++;
@@ -244,7 +281,7 @@ int main(int argc, char* argv[]) {
                     }
                     
                     renderer.bind_default_framebuffer();
-                    renderer.destroy_framebuffer(fbo_info);
+                    // Don't destroy the cached framebuffer - it will be reused
                 } else {
                     log_debug("Failed to create framebuffer");
                 }
@@ -252,8 +289,18 @@ int main(int argc, char* argv[]) {
                 last_frame_time = current_time;
             }
             
-            // Sleep to avoid busy waiting
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            // Calculate optimal sleep time based on remaining time until next frame
+            auto time_until_next_frame = frame_duration - elapsed;
+            auto time_until_next_event = event_duration - event_elapsed;
+            auto time_until_next_audio = audio_check_duration - audio_elapsed;
+            
+            // Sleep until the next required operation
+            auto min_sleep = std::min({time_until_next_frame, time_until_next_event, time_until_next_audio});
+            if (min_sleep > std::chrono::milliseconds(1)) {
+                std::this_thread::sleep_for(min_sleep / 2); // Sleep for half the time to avoid oversleeping
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
         
         log_info("Shutting down...");

@@ -118,6 +118,13 @@ bool MPVWrapper::create_render_context(void* (*get_proc_address)(void* ctx, cons
         return false;
     }
     
+    // Set up render context update callback to detect when new frames are available
+    mpv_render_context_set_update_callback(render_ctx_, 
+        [](void* ctx) {
+            MPVWrapper* wrapper = static_cast<MPVWrapper*>(ctx);
+            wrapper->has_new_frame_ = true;
+        }, this);
+    
     log_info("MPV render context created successfully");
     return true;
 }
@@ -150,6 +157,9 @@ bool MPVWrapper::render_frame(int fbo, int width, int height) {
         log_error("MPV render failed: " + std::string(mpv_error_string(result)));
         return false;
     }
+    
+    // Mark that we've rendered this frame
+    has_new_frame_ = false;
     
     return true;
 }
@@ -208,9 +218,11 @@ void MPVWrapper::process_events() {
         switch (event->event_id) {
             case MPV_EVENT_VIDEO_RECONFIG:
                 log_debug("Video reconfigured");
+                has_new_frame_ = true;
                 break;
             case MPV_EVENT_PLAYBACK_RESTART:
                 log_debug("Playback restarted");
+                has_new_frame_ = true;
                 break;
             case MPV_EVENT_END_FILE:
                 log_debug("End of file reached");
@@ -244,6 +256,14 @@ double MPVWrapper::get_position() const {
     if (!mpv_) return 0.0;
     std::string position_str = get_property("time-pos");
     return position_str.empty() ? 0.0 : std::stod(position_str);
+}
+
+bool MPVWrapper::has_new_frame() const {
+    return has_new_frame_;
+}
+
+void MPVWrapper::mark_frame_rendered() {
+    has_new_frame_ = false;
 }
 
 void MPVWrapper::on_mpv_events(void* ctx) {

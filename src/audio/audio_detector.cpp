@@ -137,8 +137,9 @@ void AudioDetector::monitor_audio_sources() {
         
         pa_threaded_mainloop_unlock(mainloop_);
         
-        // Check every 500ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        // Check every 1000ms instead of 500ms to reduce CPU usage
+        // Audio detection doesn't need to be as frequent
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     
     log_debug("Audio monitoring thread stopped");

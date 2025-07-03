@@ -5,6 +5,8 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <wayland-egl.h>
+#include <map>
+#include <utility>
 
 // OpenGL extension function declarations
 #ifndef GL_VERSION_3_0
@@ -65,6 +67,10 @@ public:
     void destroy_framebuffer(const FramebufferInfo& info);
     void bind_framebuffer(const FramebufferInfo& info);
     void bind_default_framebuffer();
+    
+    // Cached framebuffer management for better performance
+    FramebufferInfo get_or_create_framebuffer(int width, int height);
+    void cleanup_framebuffer_cache();
     
     // Rendering utilities
     void clear(float r = 0.0f, float g = 0.0f, float b = 0.0f, float a = 1.0f);
@@ -128,6 +134,9 @@ private:
     PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = nullptr;
     PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
     PFNGLUNIFORM1IPROC glUniform1i = nullptr;
+    
+    // Framebuffer cache to avoid recreating framebuffers every frame
+    std::map<std::pair<int, int>, FramebufferInfo> framebuffer_cache_;
     
     bool setup_egl(void* native_display);
     bool load_gl_extensions();

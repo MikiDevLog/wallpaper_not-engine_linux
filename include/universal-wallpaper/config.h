@@ -24,6 +24,7 @@ struct Config {
     std::string scaling = "fit";                     // --scaling (stretch, fit, fill, default)
     std::string screen_root;                         // -r, --screen-root (alias for output)
     std::string background_id;                       // -b, --bg (alias for media_path)
+    bool adaptive_fps = true;                        // Enable adaptive FPS for better CPU usage
     
     static Config parse_args(int argc, char* argv[]);
     static void print_help(const char* program_name);

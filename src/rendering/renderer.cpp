@@ -117,6 +117,7 @@ bool Renderer::initialize() {
 }
 
 void Renderer::destroy() {
+    cleanup_framebuffer_cache();
     destroy_context();
 }
 
@@ -720,4 +721,34 @@ void Renderer::draw_fullscreen_quad(GLuint texture) {
     glBindVertexArray(0);
     
     check_gl_error("draw_fullscreen_quad");
+}
+
+Renderer::FramebufferInfo Renderer::get_or_create_framebuffer(int width, int height) {
+    // Check if we already have a framebuffer for this size
+    auto key = std::make_pair(width, height);
+    auto it = framebuffer_cache_.find(key);
+    
+    if (it != framebuffer_cache_.end()) {
+        log_debug("Reusing cached framebuffer: " + std::to_string(width) + "x" + std::to_string(height));
+        return it->second;
+    }
+    
+    // Create new framebuffer and cache it
+    FramebufferInfo info = create_framebuffer(width, height);
+    if (info.fbo != 0) {
+        framebuffer_cache_[key] = info;
+        log_debug("Created and cached new framebuffer: " + std::to_string(width) + "x" + std::to_string(height));
+    }
+    
+    return info;
+}
+
+void Renderer::cleanup_framebuffer_cache() {
+    log_debug("Cleaning up framebuffer cache (" + std::to_string(framebuffer_cache_.size()) + " entries)");
+    
+    for (auto& pair : framebuffer_cache_) {
+        destroy_framebuffer(pair.second);
+    }
+    
+    framebuffer_cache_.clear();
 }
