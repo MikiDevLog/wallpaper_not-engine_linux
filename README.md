@@ -4,6 +4,8 @@ A lightweight wallpaper application for Linux that supports both X11 and Wayland
 Made as an add-on for my [GUI project](https://github.com/MikiDevLog/wallpaperengine-gui).
 An old and bad attempt at this project is stored [here](https://github.com/MikiDevLog/linux-wallpaperengine-ext).
 
+P.S(25.07.04) Added script to convert videos to h.264 since some videos can use old unsupported codec like mpeg4 part 2, script intaractive, needs to be placed where video stored and that it.
+
 ## Features
 
 - GPU acceleration + support for many video cards for decoding due to built-in MPV support
@@ -120,6 +122,8 @@ make -j$(nproc)
 - `--force-x11` - Force X11 backend
 - `--force-wayland` - Force Wayland backend
 - `--log-level LEVEL` - Set log level (debug, info, warn, error)
+- `--no-fullscreen-pause` - Don't pause wallpaper when fullscreen apps are detected (uses dumb CPU-usage based detection which is better then using wayland protocol that might not work on some DE`s but not reliable)
+- `--no-adaptive-fps` - Disable adaptive FPS (always render at target FPS)
 
 ## Contributing
 
