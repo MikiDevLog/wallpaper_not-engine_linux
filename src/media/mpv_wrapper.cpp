@@ -24,8 +24,21 @@ bool MPVWrapper::initialize(const std::string& media_path, bool hardware_decode,
     mpv_set_option_string(mpv_, "msg-level", "all=no");
     
     if (hardware_decode) {
-        mpv_set_option_string(mpv_, "hwdec", "auto-safe");
+        // Use more aggressive hardware decoding for better performance
+        mpv_set_option_string(mpv_, "hwdec", "vaapi,vdpau,nvdec,auto-safe");
         mpv_set_option_string(mpv_, "hwdec-codecs", "all");
+        
+        // CRITICAL: Enable zero-copy rendering to eliminate GPU→CPU→GPU bottleneck
+        mpv_set_option_string(mpv_, "gpu-hwdec-interop", "auto");
+        mpv_set_option_string(mpv_, "hwdec-extra-frames", "4");  // Reduce frame copying
+        
+        // Direct rendering optimizations
+        mpv_set_option_string(mpv_, "vd-lavc-dr", "yes");  // Direct rendering
+        mpv_set_option_string(mpv_, "vd-lavc-assume-old-x264", "no");
+        
+        // Zero-copy texture mapping (eliminates vaapi_transfer_data_from bottleneck)
+        mpv_set_option_string(mpv_, "opengl-hwdec-interop", "auto");
+        mpv_set_option_string(mpv_, "video-sync", "display-resample");  // Reduce frame drops
     } else {
         mpv_set_option_string(mpv_, "hwdec", "no");
     }
@@ -41,10 +54,30 @@ bool MPVWrapper::initialize(const std::string& media_path, bool hardware_decode,
         mpv_set_option_string(mpv_, "volume", std::to_string(volume * 100).c_str());
     }
     
-    // Performance options
+    // Performance options for zero-copy rendering
     mpv_set_option_string(mpv_, "vo", "libmpv");
     mpv_set_option_string(mpv_, "gpu-context", "auto");
-    mpv_set_option_string(mpv_, "gpu-api", "auto");
+    mpv_set_option_string(mpv_, "gpu-api", "opengl");  // Force OpenGL for better interop
+    
+    // Memory optimization - reduce texture uploads
+    mpv_set_option_string(mpv_, "opengl-pbo", "yes");  // Use PBOs for async texture uploads
+    mpv_set_option_string(mpv_, "temporal-dither", "no");  // Reduce texture operations
+    
+    // Reduce memory bandwidth usage
+    mpv_set_option_string(mpv_, "scale", "bilinear");  // Faster than default lanczos
+    mpv_set_option_string(mpv_, "dscale", "bilinear");  // Faster downscaling
+    mpv_set_option_string(mpv_, "cscale", "bilinear");  // Faster chroma scaling
+    
+    // Add debugging to show what decoder is used
+    mpv_set_option_string(mpv_, "msg-level", "ffmpeg/demuxer=v,vd=v");
+    
+    // Thread optimizations
+    mpv_set_option_string(mpv_, "vd-lavc-threads", "0");  // Use all CPU cores
+    
+    // Frame rate limiting to reduce memory bandwidth
+    mpv_set_option_string(mpv_, "display-fps", "30");  // Limit to 30fps for wallpaper
+    mpv_set_option_string(mpv_, "video-sync", "display-resample");  // Smooth playback
+    mpv_set_option_string(mpv_, "interpolation", "no");  // Disable interpolation to save CPU
     
     // Parse additional options
     if (!additional_options.empty()) {

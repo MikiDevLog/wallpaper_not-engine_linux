@@ -4,6 +4,7 @@
 #include "universal-wallpaper/mpv_wrapper.h"
 #include "universal-wallpaper/utils.h"
 #include "universal-wallpaper/audio_detector.h"
+#include "universal-wallpaper/fullscreen_detector.h"
 #include <iostream>
 #include <csignal>
 #include <atomic>
@@ -31,13 +32,13 @@ int main(int argc, char* argv[]) {
     
     // Set log level
     if (config.verbose) {
-        set_log_level(LogLevel::DEBUG);
+        set_log_level(LogLevel::LOG_DEBUG);
     } else if (config.log_level == "debug") {
-        set_log_level(LogLevel::DEBUG);
+        set_log_level(LogLevel::LOG_DEBUG);
     } else if (config.log_level == "warn") {
-        set_log_level(LogLevel::WARN);
+        set_log_level(LogLevel::LOG_WARN);
     } else if (config.log_level == "error") {
-        set_log_level(LogLevel::ERROR);
+        set_log_level(LogLevel::LOG_ERROR);
     }
     
     log_info("Wallpaper Not-Engine Linux starting...");
@@ -124,6 +125,22 @@ int main(int argc, char* argv[]) {
             }
         }
         
+        // Initialize fullscreen detector for CPU optimization
+        FullscreenDetector fullscreen_detector;
+        if (config.pause_on_fullscreen && !config.no_fullscreen_pause) {
+            fullscreen_detector.set_enabled(true);
+            if (!fullscreen_detector.initialize()) {
+                log_warn("Failed to initialize fullscreen detector, fullscreen pause will be disabled");
+            } else {
+                log_info("Fullscreen detector initialized - will pause wallpaper when fullscreen apps are active");
+            }
+        } else {
+            fullscreen_detector.set_enabled(false);
+            if (config.no_fullscreen_pause) {
+                log_info("Fullscreen pause disabled by --no-fullscreen-pause flag");
+            }
+        }
+        
         if (!mpv.initialize(config.media_path, config.hardware_decode, config.loop,
                            final_mute_audio, config.volume, config.mpv_options)) {
             log_error("Failed to initialize MPV");
@@ -157,6 +174,7 @@ int main(int argc, char* argv[]) {
         bool was_muted_by_detector = false;
         bool needs_redraw = true; // Force initial render
         bool is_static_content = false; // Track if content is static (image)
+        bool is_paused_by_fullscreen = false; // Track if paused by fullscreen app
         auto last_static_check = std::chrono::steady_clock::now();
         
         while (g_running && !display_manager.should_quit()) {
@@ -164,6 +182,35 @@ int main(int argc, char* argv[]) {
             auto elapsed = current_time - last_frame_time;
             auto event_elapsed = current_time - last_event_time;
             auto audio_elapsed = current_time - last_audio_check_time;
+            
+            // Process events less frequently to reduce CPU usage
+            if (event_elapsed >= event_duration) {
+                display_manager.process_events();
+                mpv.process_events();
+                last_event_time = current_time;
+            }
+            
+            // Check for fullscreen applications (less frequently)
+            if (fullscreen_detector.is_enabled()) {
+                bool fullscreen_active = fullscreen_detector.is_fullscreen_app_active();
+                
+                if (fullscreen_active && !is_paused_by_fullscreen) {
+                    log_info("Pausing wallpaper due to fullscreen application");
+                    is_paused_by_fullscreen = true;
+                    needs_redraw = false; // Don't render while paused
+                } else if (!fullscreen_active && is_paused_by_fullscreen) {
+                    log_info("Resuming wallpaper (no fullscreen application)");
+                    is_paused_by_fullscreen = false;
+                    needs_redraw = true; // Force redraw when resuming
+                }
+            }
+            
+            // Skip rendering if paused by fullscreen app
+            if (is_paused_by_fullscreen) {
+                // Sleep longer when paused to save more CPU
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
+            }
             
             // Process events less frequently to reduce CPU usage
             if (event_elapsed >= event_duration) {
@@ -193,9 +240,19 @@ int main(int argc, char* argv[]) {
             // Render frame if enough time has passed and we have new content
             bool should_render = needs_redraw || mpv.has_new_frame();
             
+            // Advanced frame throttling to reduce memory bandwidth
+            static auto last_render_time = std::chrono::steady_clock::now();
+            auto render_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - last_render_time);
+            
+            // Skip render if we just rendered and MPV doesn't have new content
+            if (render_elapsed < std::chrono::milliseconds(16) && !mpv.has_new_frame()) {
+                should_render = false;
+            }
+            
             if (elapsed >= frame_duration && should_render) {
                 log_debug("Rendering frame (new_content: " + std::string(mpv.has_new_frame() ? "true" : "false") + ")");
                 renderer.make_current();
+                last_render_time = current_time;
                 
                 // Check if this is static content (image) for adaptive FPS
                 if (config.adaptive_fps && std::chrono::steady_clock::now() - last_static_check > std::chrono::seconds(5)) {

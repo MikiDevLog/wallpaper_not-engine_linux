@@ -381,12 +381,20 @@ Renderer::FramebufferInfo Renderer::create_framebuffer(int width, int height) {
     info.width = width;
     info.height = height;
     
-    // Create texture
+    // Create texture with optimized format for better performance
     glGenTextures(1, &info.texture);
     glBindTexture(GL_TEXTURE_2D, info.texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    
+    // Use RGBA format for better alignment and performance
+    // This reduces memory bandwidth compared to RGB
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    
+    // Optimize texture parameters to reduce memory bandwidth
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    
     glBindTexture(GL_TEXTURE_2D, 0);
     
     // Create framebuffer
@@ -562,6 +570,7 @@ bool Renderer::load_gl_extensions() {
     glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC)eglGetProcAddress("glEnableVertexAttribArray");
     glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)eglGetProcAddress("glGetUniformLocation");
     glUniform1i = (PFNGLUNIFORM1IPROC)eglGetProcAddress("glUniform1i");
+    glBlitFramebuffer = (PFNGLBLITFRAMEBUFFERPROC)eglGetProcAddress("glBlitFramebuffer");
     
     if (!glGenFramebuffers || !glBindFramebuffer || !glFramebufferTexture2D ||
         !glCheckFramebufferStatus || !glDeleteFramebuffers || !glCreateShader ||
@@ -574,6 +583,11 @@ bool Renderer::load_gl_extensions() {
         !glEnableVertexAttribArray || !glGetUniformLocation || !glUniform1i) {
         std::cerr << "Failed to load OpenGL extension functions" << std::endl;
         return false;
+    }
+    
+    // glBlitFramebuffer is optional for multi-monitor optimization
+    if (!glBlitFramebuffer) {
+        log_warn("glBlitFramebuffer not available - multi-monitor optimization disabled");
     }
     
     return true;
@@ -733,6 +747,14 @@ Renderer::FramebufferInfo Renderer::get_or_create_framebuffer(int width, int hei
         return it->second;
     }
     
+    // Limit cache size to prevent memory bloat
+    if (framebuffer_cache_.size() >= 8) {
+        log_debug("Framebuffer cache limit reached, cleaning up oldest entry");
+        auto oldest = framebuffer_cache_.begin();
+        destroy_framebuffer(oldest->second);
+        framebuffer_cache_.erase(oldest);
+    }
+    
     // Create new framebuffer and cache it
     FramebufferInfo info = create_framebuffer(width, height);
     if (info.fbo != 0) {
@@ -751,4 +773,45 @@ void Renderer::cleanup_framebuffer_cache() {
     }
     
     framebuffer_cache_.clear();
+}
+
+bool Renderer::copy_framebuffer_to_texture(const FramebufferInfo& source, GLuint target_texture, int target_width, int target_height) {
+    if (!glBlitFramebuffer) {
+        log_warn("glBlitFramebuffer not available, using slower texture copy method");
+        return false;
+    }
+    
+    // Create temporary framebuffer for target texture
+    GLuint target_fbo;
+    glGenFramebuffers(1, &target_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, target_fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target_texture, 0);
+    
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        log_error("Target framebuffer incomplete for blit operation");
+        glDeleteFramebuffers(1, &target_fbo);
+        return false;
+    }
+    
+    // Set up source framebuffer for reading
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, source.fbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target_fbo);
+    
+    // Blit the framebuffer
+    glBlitFramebuffer(0, 0, source.width, source.height,
+                     0, 0, target_width, target_height,
+                     GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    
+    // Clean up
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &target_fbo);
+    
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        log_error("OpenGL error during framebuffer blit: " + std::to_string(error));
+        return false;
+    }
+    
+    log_debug("Successfully blitted framebuffer to texture");
+    return true;
 }

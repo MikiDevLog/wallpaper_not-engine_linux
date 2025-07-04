@@ -8,32 +8,32 @@
 #include <cstdlib>
 #include <csignal>
 
-static LogLevel current_log_level = LogLevel::INFO;
+static LogLevel current_log_level = LogLevel::LOG_INFO;
 
 void set_log_level(LogLevel level) {
     current_log_level = level;
 }
 
 void log_debug(const std::string& message) {
-    if (current_log_level <= LogLevel::DEBUG) {
+    if (current_log_level <= LogLevel::LOG_DEBUG) {
         std::cout << "[DEBUG] " << message << std::endl;
     }
 }
 
 void log_info(const std::string& message) {
-    if (current_log_level <= LogLevel::INFO) {
+    if (current_log_level <= LogLevel::LOG_INFO) {
         std::cout << "[INFO] " << message << std::endl;
     }
 }
 
 void log_warn(const std::string& message) {
-    if (current_log_level <= LogLevel::WARN) {
+    if (current_log_level <= LogLevel::LOG_WARN) {
         std::cout << "[WARN] " << message << std::endl;
     }
 }
 
 void log_error(const std::string& message) {
-    if (current_log_level <= LogLevel::ERROR) {
+    if (current_log_level <= LogLevel::LOG_ERROR) {
         std::cerr << "[ERROR] " << message << std::endl;
     }
 }

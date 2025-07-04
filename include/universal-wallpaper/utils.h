@@ -4,10 +4,10 @@
 #include <vector>
 
 enum class LogLevel {
-    DEBUG,
-    INFO,
-    WARN,
-    ERROR
+    LOG_DEBUG,
+    LOG_INFO,
+    LOG_WARN,
+    LOG_ERROR
 };
 
 void set_log_level(LogLevel level);

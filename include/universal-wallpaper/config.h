@@ -25,6 +25,8 @@ struct Config {
     std::string screen_root;                         // -r, --screen-root (alias for output)
     std::string background_id;                       // -b, --bg (alias for media_path)
     bool adaptive_fps = true;                        // Enable adaptive FPS for better CPU usage
+    bool pause_on_fullscreen = true;                 // Pause when fullscreen apps are detected
+    bool no_fullscreen_pause = false;                // Disable fullscreen pause detection
     
     static Config parse_args(int argc, char* argv[]);
     static void print_help(const char* program_name);

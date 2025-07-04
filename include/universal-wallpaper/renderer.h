@@ -39,6 +39,7 @@ typedef void (APIENTRY *PFNGLVERTEXATTRIBPOINTERPROC)(GLuint index, GLint size, 
 typedef void (APIENTRY *PFNGLENABLEVERTEXATTRIBARRAYPROC)(GLuint index);
 typedef GLint (APIENTRY *PFNGLGETUNIFORMLOCATIONPROC)(GLuint program, const GLchar *name);
 typedef void (APIENTRY *PFNGLUNIFORM1IPROC)(GLint location, GLint value);
+typedef void (APIENTRY *PFNGLBLITFRAMEBUFFERPROC)(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
 #endif
 
 class Renderer {
@@ -71,6 +72,9 @@ public:
     // Cached framebuffer management for better performance
     FramebufferInfo get_or_create_framebuffer(int width, int height);
     void cleanup_framebuffer_cache();
+    
+    // Multi-monitor optimization - render once, copy to multiple outputs
+    bool copy_framebuffer_to_texture(const FramebufferInfo& source, GLuint target_texture, int target_width, int target_height);
     
     // Rendering utilities
     void clear(float r = 0.0f, float g = 0.0f, float b = 0.0f, float a = 1.0f);
@@ -134,6 +138,7 @@ private:
     PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = nullptr;
     PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
     PFNGLUNIFORM1IPROC glUniform1i = nullptr;
+    PFNGLBLITFRAMEBUFFERPROC glBlitFramebuffer = nullptr;
     
     // Framebuffer cache to avoid recreating framebuffers every frame
     std::map<std::pair<int, int>, FramebufferInfo> framebuffer_cache_;
