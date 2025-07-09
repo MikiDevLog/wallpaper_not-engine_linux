@@ -171,7 +171,6 @@ set(CORE_SOURCES
     src/core/main.cpp
     src/core/utils.cpp
     src/core/display_manager.cpp
-    src/core/fullscreen_detector.cpp
 )
 
 set(BACKEND_SOURCES

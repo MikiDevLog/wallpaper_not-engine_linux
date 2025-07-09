@@ -122,8 +122,6 @@ make -j$(nproc)
 - `--force-x11` - Force X11 backend
 - `--force-wayland` - Force Wayland backend
 - `--log-level LEVEL` - Set log level (debug, info, warn, error)
-- `--no-fullscreen-pause` - Don't pause wallpaper when fullscreen apps are detected (uses dumb CPU-usage based detection which is better then using wayland protocol that might not work on some DE`s but not reliable)
-- `--no-adaptive-fps` - Disable adaptive FPS (always render at target FPS)
 
 ## Contributing
 

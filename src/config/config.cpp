@@ -106,13 +106,6 @@ Config Config::parse_args(int argc, char* argv[]) {
                 config.log_level = argv[++i];
             }
         }
-        else if (arg == "--no-adaptive-fps") {
-            config.adaptive_fps = false;
-        }
-        else if (arg == "--no-fullscreen-pause") {
-            config.no_fullscreen_pause = true;
-            config.pause_on_fullscreen = false;
-        }
         else if (arg[0] != '-') {
             config.media_path = arg;
         }
@@ -154,8 +147,6 @@ void Config::print_help(const char* program_name) {
     std::cout << "  -v, --verbose              Enable verbose output\n";
     std::cout << "  -d, --daemon               Run as daemon\n";
     std::cout << "  --log-level LEVEL          Set log level (debug, info, warn, error)\n";
-    std::cout << "  --no-adaptive-fps          Disable adaptive FPS (always render at target FPS)\n";
-    std::cout << "  --no-fullscreen-pause      Don't pause wallpaper when fullscreen apps are detected\n";
     std::cout << "\nExamples:\n";
     std::cout << "  " << program_name << " /path/to/video.mp4\n";
     std::cout << "  " << program_name << " -o DP-1 /path/to/video.mp4\n";
