@@ -122,6 +122,7 @@ if(WAYLAND_PROTOCOLS_AVAILABLE)
     endif()
     
     # Generate protocol headers and sources
+    set(PROTOCOL_HEADERS "")
     set(PROTOCOL_SOURCES "")
     
     foreach(PROTOCOL_XML ${WLR_LAYER_SHELL_XML} ${XDG_OUTPUT_XML} ${XDG_SHELL_XML})
@@ -146,6 +147,7 @@ if(WAYLAND_PROTOCOLS_AVAILABLE)
                 COMMENT "Generating ${PROTOCOL_NAME}.c"
             )
             
+            list(APPEND PROTOCOL_HEADERS ${PROTOCOL_H})
             list(APPEND PROTOCOL_SOURCES ${PROTOCOL_C})
         endif()
     endforeach()
@@ -194,7 +196,12 @@ set(CONFIG_SOURCES
     src/config/config.cpp
 )
 
-# Combine all sources
+# Create a custom target for protocol generation
+if(WAYLAND_PROTOCOLS_AVAILABLE)
+    add_custom_target(wayland-protocols DEPENDS ${PROTOCOL_HEADERS} ${PROTOCOL_SOURCES})
+endif()
+
+# Combine all sources (excluding protocol headers)
 set(ALL_SOURCES
     ${CORE_SOURCES}
     ${BACKEND_SOURCES}
@@ -219,6 +226,11 @@ set(INCLUDE_DIRS
 
 # Create the main executable
 add_executable(${PROJECT_NAME} ${ALL_SOURCES})
+
+# Add dependency on protocol generation
+if(WAYLAND_PROTOCOLS_AVAILABLE)
+    add_dependencies(${PROJECT_NAME} wayland-protocols)
+endif()
 
 # Set C language for protocol files
 foreach(PROTOCOL_FILE ${PROTOCOL_SOURCES})
